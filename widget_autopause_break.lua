@@ -1,27 +1,27 @@
 function widget:GetInfo()
     return {
         name    = "Auto Pause Break Reminder",
-        desc    = "Pauses the game periodically for stretch breaks with optional sound alerts",
+        desc    = "Periodic stretch breaks with pause, countdown, and optional sound",
         author  = "szpak (AI assisted)",
         date    = "2025-12-28",
         license = "GPLv2+",
         layer   = 0,
-        enabled = true
+        enabled = false, -- must be enabled once via F11
     }
 end
 
 ------------------------------------------------------------
--- DEFAULT CONFIG (user configurable)
+-- CONFIG (persisted by Spring)
 ------------------------------------------------------------
 
 local config = {
-    breakIntervalMinutes = 30, -- minutes
-    breakDurationMinutes = 2,  -- minutes
-    soundEnabled         = true,
+    breakIntervalMinutes = 30,
+    breakDurationMinutes = 2,
+    soundEnabled = true,
 }
 
 ------------------------------------------------------------
--- INTERNAL CONSTANTS
+-- CONSTANTS
 ------------------------------------------------------------
 
 local UPDATE_INTERVAL = 1 -- seconds
@@ -39,8 +39,8 @@ local COUNTDOWN_SECONDS = {
 -- STATE
 ------------------------------------------------------------
 
-local nextBreakTime
-local pauseStartTime
+local nextBreakGameTime
+local pauseStartTimer -- real timer
 local pausedByWidget = false
 local lastUpdate = 0
 local countdownPlayed = {}
@@ -49,8 +49,9 @@ local countdownPlayed = {}
 -- HELPERS
 ------------------------------------------------------------
 
-local function IsPauseAllowed()
-    return Spring.GetGameRulesParam("pauseAllowed") == 1
+local function IsPaused()
+    local _, _, paused = Spring.GetGameSpeed()
+    return paused
 end
 
 local function PlayAlert()
@@ -77,93 +78,80 @@ end
 
 function widget:SetConfigData(data)
     if type(data) ~= "table" then return end
-
     if type(data.breakIntervalMinutes) == "number" then
         config.breakIntervalMinutes = data.breakIntervalMinutes
     end
-
     if type(data.breakDurationMinutes) == "number" then
         config.breakDurationMinutes = data.breakDurationMinutes
     end
-
     if type(data.soundEnabled) == "boolean" then
         config.soundEnabled = data.soundEnabled
     end
 end
 
 ------------------------------------------------------------
--- WIDGET LIFECYCLE
+-- LIFECYCLE
 ------------------------------------------------------------
 
 function widget:Initialize()
     local now = Spring.GetGameSeconds()
-    nextBreakTime = now + BreakIntervalSeconds()
+    nextBreakGameTime = now + BreakIntervalSeconds()
 end
 
 function widget:Update(dt)
     lastUpdate = lastUpdate + dt
-    if lastUpdate < UPDATE_INTERVAL then
-        return
-    end
+    if lastUpdate < UPDATE_INTERVAL then return end
     lastUpdate = 0
 
-    local now = Spring.GetGameSeconds()
-    if not now then return end
+    local gameNow = Spring.GetGameSeconds()
+    if not gameNow then return end
 
     --------------------------------------------------------
-    -- Trigger break
+    -- Trigger break (game time)
     --------------------------------------------------------
-    if now >= nextBreakTime and not pauseStartTime then
-        Spring.Echo("🧘 Time to stretch! Recommended " ..
-            config.breakDurationMinutes .. "-minute break.")
+    if gameNow >= nextBreakGameTime and not pauseStartTimer then
+        Spring.Echo("🧘 Time to stretch! Recommended "
+            .. config.breakDurationMinutes .. "-minute break.")
         PlayAlert()
 
-        if IsPauseAllowed() then
-            if not Spring.IsPaused() then
-                Spring.SendCommands("pause 1")
-                pausedByWidget = true
-                pauseStartTime = now
-                Spring.Echo("⏸ Game paused for your break.")
-            else
-                pauseStartTime = now
-                pausedByWidget = false
-            end
+        if not IsPaused() then
+            Spring.SendCommands("pause 1")
+            pausedByWidget = true
         else
-            Spring.Echo("⚠ Pause not allowed in this game. Please consider taking a short break anyway!")
-            pauseStartTime = now
             pausedByWidget = false
         end
 
+        pauseStartTimer = Spring.GetTimer()
         countdownPlayed = {}
     end
 
     --------------------------------------------------------
-    -- Countdown warnings
+    -- Countdown (real time)
     --------------------------------------------------------
-    if pauseStartTime then
-        local remaining =
-            math.ceil(BreakDurationSeconds() - (now - pauseStartTime))
+    if pauseStartTimer then
+        local elapsed = Spring.DiffTimers(Spring.GetTimer(), pauseStartTimer)
+        local remaining = math.ceil(BreakDurationSeconds() - elapsed)
 
         if COUNTDOWN_SECONDS[remaining] and not countdownPlayed[remaining] then
             Spring.Echo("⏳ Resuming game in " .. remaining .. " seconds...")
             PlayAlert()
             countdownPlayed[remaining] = true
         end
-    end
 
-    --------------------------------------------------------
-    -- Resume
-    --------------------------------------------------------
-    if pauseStartTime and (now - pauseStartTime >= BreakDurationSeconds()) then
-        if pausedByWidget and Spring.IsPaused() then
-            Spring.SendCommands("pause 0")
-            Spring.Echo("🎮 Break over! Game resumed.")
+        ----------------------------------------------------
+        -- Resume
+        ----------------------------------------------------
+        if elapsed >= BreakDurationSeconds() then
+            if pausedByWidget and IsPaused() then
+                Spring.SendCommands("pause 0")
+                Spring.Echo("🎮 Break over! Game resumed.")
+            end
+
+            pauseStartTimer = nil
+            pausedByWidget = false
+            countdownPlayed = {}
+            nextBreakGameTime = gameNow + BreakIntervalSeconds()
         end
-
-        pauseStartTime = nil
-        pausedByWidget = false
-        countdownPlayed = {}
-        nextBreakTime = now + BreakIntervalSeconds()
     end
 end
 
