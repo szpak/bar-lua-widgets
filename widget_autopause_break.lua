@@ -1,7 +1,7 @@
 function widget:GetInfo()
     return {
         name    = "Auto Pause Break Reminder",
-        desc    = "Pauses the game every 30 minutes for a 2-minute stretch break",
+        desc    = "Pauses the game every 30 minutes with sound reminders and countdown resume warnings",
         author  = "szpak (AI assisted)",
         date    = "2025-12-28",
         license = "GPLv2+",
@@ -16,7 +16,18 @@ end
 
 local BREAK_INTERVAL  = 30 * 60  -- 30 minutes
 local BREAK_DURATION  = 2 * 60   -- 2 minutes
-local UPDATE_INTERVAL = 1        -- seconds (throttling)
+local UPDATE_INTERVAL = 1        -- seconds (throttled update)
+
+local ALERT_SOUND = "LuaUI/Sounds/beep4.wav"
+
+-- Countdown seconds before resume
+local COUNTDOWN_SECONDS = {
+    [10] = true,
+    [5]  = true,
+    [3]  = true,
+    [2]  = true,
+    [1]  = true,
+}
 
 ------------------------------------------------------------
 -- STATE
@@ -26,14 +37,18 @@ local nextBreakTime
 local pauseStartTime
 local pausedByWidget = false
 local lastUpdate = 0
+local countdownPlayed = {}
 
 ------------------------------------------------------------
 -- HELPERS
 ------------------------------------------------------------
 
 local function IsPauseAllowed()
-    local allowed = Spring.GetGameRulesParam("pauseAllowed")
-    return allowed == 1
+    return Spring.GetGameRulesParam("pauseAllowed") == 1
+end
+
+local function PlayAlert()
+    Spring.PlaySoundFile(ALERT_SOUND, 1.0)
 end
 
 ------------------------------------------------------------
@@ -56,10 +71,11 @@ function widget:Update(dt)
     if not now then return end
 
     --------------------------------------------------------
-    -- Time to take a break
+    -- Trigger break
     --------------------------------------------------------
     if now >= nextBreakTime and not pauseStartTime then
         Spring.Echo("🧘 Time to stretch! Recommended 2-minute break.")
+        PlayAlert()
 
         if IsPauseAllowed() then
             if not Spring.IsPaused() then
@@ -68,15 +84,29 @@ function widget:Update(dt)
                 pauseStartTime = now
                 Spring.Echo("⏸ Game paused for your break.")
             else
-                -- Game already paused manually
+                -- Already paused manually
                 pauseStartTime = now
                 pausedByWidget = false
             end
         else
             Spring.Echo("⚠ Pause not allowed in this game. Please consider taking a short break anyway!")
-            -- Still track timing so the reminder cycle continues
             pauseStartTime = now
             pausedByWidget = false
+        end
+
+        countdownPlayed = {}
+    end
+
+    --------------------------------------------------------
+    -- Countdown warnings before resume
+    --------------------------------------------------------
+    if pauseStartTime then
+        local remaining = math.ceil(BREAK_DURATION - (now - pauseStartTime))
+
+        if COUNTDOWN_SECONDS[remaining] and not countdownPlayed[remaining] then
+            Spring.Echo("⏳ Resuming game in " .. remaining .. " seconds...")
+            PlayAlert()
+            countdownPlayed[remaining] = true
         end
     end
 
@@ -92,6 +122,7 @@ function widget:Update(dt)
         -- Schedule next break
         pauseStartTime = nil
         pausedByWidget = false
+        countdownPlayed = {}
         nextBreakTime = now + BREAK_INTERVAL
     end
 end
