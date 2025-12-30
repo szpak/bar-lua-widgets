@@ -25,7 +25,9 @@ local config = {
 ------------------------------------------------------------
 
 local UPDATE_INTERVAL = 1
-local ALERT_SOUND = "LuaUI/Sounds/beep4.wav"
+
+-- Known-to-exist BAR sound (changeable by users)
+local ALERT_SOUND = "LuaUI/Sounds/notification.wav"
 
 local COUNTDOWN_SECONDS = {
     [10] = true,
@@ -40,8 +42,8 @@ local COUNTDOWN_SECONDS = {
 ------------------------------------------------------------
 
 local nextBreakGameTime
-local pauseStartTimer        -- real timer (widget pause)
-local manualPauseTimer      -- real timer (manual pause)
+local pauseStartTimer
+local manualPauseTimer
 local pausedByWidget = false
 local wasPausedLastUpdate = false
 local lastUpdate = 0
@@ -98,6 +100,13 @@ end
 function widget:Initialize()
     local now = Spring.GetGameSeconds()
     nextBreakGameTime = now + BreakIntervalSeconds()
+
+    Spring.Echo(
+        "🧘 Auto Break Reminder enabled: every "
+        .. config.breakIntervalMinutes .. " min, "
+        .. config.breakDurationMinutes .. " min breaks"
+        .. (config.soundEnabled and " (sound on)" or " (sound off)")
+    )
 end
 
 function widget:Update(dt)
@@ -111,15 +120,13 @@ function widget:Update(dt)
     local pausedNow = IsPaused()
 
     --------------------------------------------------------
-    -- Detect pause transitions
+    -- Manual pause detection
     --------------------------------------------------------
 
-    -- Manual pause start
     if pausedNow and not wasPausedLastUpdate and not pausedByWidget then
         manualPauseTimer = Spring.GetTimer()
     end
 
-    -- Manual unpause
     if not pausedNow and wasPausedLastUpdate and manualPauseTimer then
         local manualPauseDuration =
             Spring.DiffTimers(Spring.GetTimer(), manualPauseTimer)
@@ -133,7 +140,7 @@ function widget:Update(dt)
     end
 
     --------------------------------------------------------
-    -- Widget-triggered break
+    -- Trigger break
     --------------------------------------------------------
 
     if gameNow >= nextBreakGameTime and not pauseStartTimer then
@@ -144,6 +151,12 @@ function widget:Update(dt)
         if not pausedNow then
             Spring.SendCommands("pause 1")
             pausedByWidget = true
+
+            -- Announce to all players (once)
+            Spring.SendCommands(
+                "say Stretch break started ("
+                .. config.breakDurationMinutes .. " min)"
+            )
         else
             pausedByWidget = false
         end
@@ -153,7 +166,7 @@ function widget:Update(dt)
     end
 
     --------------------------------------------------------
-    -- Widget pause cancelled by user
+    -- Widget pause cancelled manually
     --------------------------------------------------------
 
     if pauseStartTimer and pausedByWidget and not pausedNow then
@@ -179,10 +192,6 @@ function widget:Update(dt)
             PlayAlert()
             countdownPlayed[remaining] = true
         end
-
-        ----------------------------------------------------
-        -- Resume
-        ----------------------------------------------------
 
         if elapsed >= BreakDurationSeconds() then
             if pausedByWidget and pausedNow then
