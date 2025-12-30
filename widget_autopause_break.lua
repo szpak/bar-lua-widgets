@@ -1,7 +1,7 @@
 function widget:GetInfo()
     return {
         name    = "Auto Pause Break Reminder",
-        desc    = "Pauses the game every 30 minutes with sound reminders and countdown resume warnings",
+        desc    = "Pauses the game periodically for stretch breaks with optional sound alerts",
         author  = "szpak (AI assisted)",
         date    = "2025-12-28",
         license = "GPLv2+",
@@ -11,16 +11,22 @@ function widget:GetInfo()
 end
 
 ------------------------------------------------------------
--- CONFIG
+-- DEFAULT CONFIG (user configurable)
 ------------------------------------------------------------
 
-local BREAK_INTERVAL  = 30 * 60  -- 30 minutes
-local BREAK_DURATION  = 2 * 60   -- 2 minutes
-local UPDATE_INTERVAL = 1        -- seconds (throttled update)
+local config = {
+    breakIntervalMinutes = 30, -- minutes
+    breakDurationMinutes = 2,  -- minutes
+    soundEnabled         = true,
+}
 
+------------------------------------------------------------
+-- INTERNAL CONSTANTS
+------------------------------------------------------------
+
+local UPDATE_INTERVAL = 1 -- seconds
 local ALERT_SOUND = "LuaUI/Sounds/beep4.wav"
 
--- Countdown seconds before resume
 local COUNTDOWN_SECONDS = {
     [10] = true,
     [5]  = true,
@@ -48,7 +54,41 @@ local function IsPauseAllowed()
 end
 
 local function PlayAlert()
-    Spring.PlaySoundFile(ALERT_SOUND, 1.0)
+    if config.soundEnabled then
+        Spring.PlaySoundFile(ALERT_SOUND, 1.0)
+    end
+end
+
+local function BreakIntervalSeconds()
+    return math.max(1, config.breakIntervalMinutes) * 60
+end
+
+local function BreakDurationSeconds()
+    return math.max(1, config.breakDurationMinutes) * 60
+end
+
+------------------------------------------------------------
+-- CONFIG PERSISTENCE
+------------------------------------------------------------
+
+function widget:GetConfigData()
+    return config
+end
+
+function widget:SetConfigData(data)
+    if type(data) ~= "table" then return end
+
+    if type(data.breakIntervalMinutes) == "number" then
+        config.breakIntervalMinutes = data.breakIntervalMinutes
+    end
+
+    if type(data.breakDurationMinutes) == "number" then
+        config.breakDurationMinutes = data.breakDurationMinutes
+    end
+
+    if type(data.soundEnabled) == "boolean" then
+        config.soundEnabled = data.soundEnabled
+    end
 end
 
 ------------------------------------------------------------
@@ -57,7 +97,7 @@ end
 
 function widget:Initialize()
     local now = Spring.GetGameSeconds()
-    nextBreakTime = now + BREAK_INTERVAL
+    nextBreakTime = now + BreakIntervalSeconds()
 end
 
 function widget:Update(dt)
@@ -74,7 +114,8 @@ function widget:Update(dt)
     -- Trigger break
     --------------------------------------------------------
     if now >= nextBreakTime and not pauseStartTime then
-        Spring.Echo("🧘 Time to stretch! Recommended 2-minute break.")
+        Spring.Echo("🧘 Time to stretch! Recommended " ..
+            config.breakDurationMinutes .. "-minute break.")
         PlayAlert()
 
         if IsPauseAllowed() then
@@ -84,7 +125,6 @@ function widget:Update(dt)
                 pauseStartTime = now
                 Spring.Echo("⏸ Game paused for your break.")
             else
-                -- Already paused manually
                 pauseStartTime = now
                 pausedByWidget = false
             end
@@ -98,10 +138,11 @@ function widget:Update(dt)
     end
 
     --------------------------------------------------------
-    -- Countdown warnings before resume
+    -- Countdown warnings
     --------------------------------------------------------
     if pauseStartTime then
-        local remaining = math.ceil(BREAK_DURATION - (now - pauseStartTime))
+        local remaining =
+            math.ceil(BreakDurationSeconds() - (now - pauseStartTime))
 
         if COUNTDOWN_SECONDS[remaining] and not countdownPlayed[remaining] then
             Spring.Echo("⏳ Resuming game in " .. remaining .. " seconds...")
@@ -111,19 +152,18 @@ function widget:Update(dt)
     end
 
     --------------------------------------------------------
-    -- Resume after break duration
+    -- Resume
     --------------------------------------------------------
-    if pauseStartTime and (now - pauseStartTime >= BREAK_DURATION) then
+    if pauseStartTime and (now - pauseStartTime >= BreakDurationSeconds()) then
         if pausedByWidget and Spring.IsPaused() then
             Spring.SendCommands("pause 0")
             Spring.Echo("🎮 Break over! Game resumed.")
         end
 
-        -- Schedule next break
         pauseStartTime = nil
         pausedByWidget = false
         countdownPlayed = {}
-        nextBreakTime = now + BREAK_INTERVAL
+        nextBreakTime = now + BreakIntervalSeconds()
     end
 end
 
