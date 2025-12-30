@@ -11,7 +11,7 @@ function widget:GetInfo()
 end
 
 ------------------------------------------------------------
--- CONFIG (persisted by Spring)
+-- CONFIG
 ------------------------------------------------------------
 
 local config = {
@@ -24,7 +24,7 @@ local config = {
 -- CONSTANTS
 ------------------------------------------------------------
 
-local UPDATE_INTERVAL = 1 -- seconds
+local UPDATE_INTERVAL = 1
 local ALERT_SOUND = "LuaUI/Sounds/beep4.wav"
 
 local COUNTDOWN_SECONDS = {
@@ -40,8 +40,10 @@ local COUNTDOWN_SECONDS = {
 ------------------------------------------------------------
 
 local nextBreakGameTime
-local pauseStartTimer -- real timer
+local pauseStartTimer        -- real timer (widget pause)
+local manualPauseTimer      -- real timer (manual pause)
 local pausedByWidget = false
+local wasPausedLastUpdate = false
 local lastUpdate = 0
 local countdownPlayed = {}
 
@@ -106,15 +108,40 @@ function widget:Update(dt)
     local gameNow = Spring.GetGameSeconds()
     if not gameNow then return end
 
+    local pausedNow = IsPaused()
+
     --------------------------------------------------------
-    -- Trigger break (game time)
+    -- Detect pause transitions
     --------------------------------------------------------
+
+    -- Manual pause start
+    if pausedNow and not wasPausedLastUpdate and not pausedByWidget then
+        manualPauseTimer = Spring.GetTimer()
+    end
+
+    -- Manual unpause
+    if not pausedNow and wasPausedLastUpdate and manualPauseTimer then
+        local manualPauseDuration =
+            Spring.DiffTimers(Spring.GetTimer(), manualPauseTimer)
+
+        if manualPauseDuration >= BreakDurationSeconds() then
+            nextBreakGameTime = gameNow + BreakIntervalSeconds()
+            Spring.Echo("🧘 Manual pause counted as a break. Next reminder reset.")
+        end
+
+        manualPauseTimer = nil
+    end
+
+    --------------------------------------------------------
+    -- Widget-triggered break
+    --------------------------------------------------------
+
     if gameNow >= nextBreakGameTime and not pauseStartTimer then
         Spring.Echo("🧘 Time to stretch! Recommended "
             .. config.breakDurationMinutes .. "-minute break.")
         PlayAlert()
 
-        if not IsPaused() then
+        if not pausedNow then
             Spring.SendCommands("pause 1")
             pausedByWidget = true
         else
@@ -126,11 +153,26 @@ function widget:Update(dt)
     end
 
     --------------------------------------------------------
-    -- Countdown (real time)
+    -- Widget pause cancelled by user
     --------------------------------------------------------
+
+    if pauseStartTimer and pausedByWidget and not pausedNow then
+        Spring.Echo("▶ Break cancelled manually. Next reminder reset.")
+        pauseStartTimer = nil
+        pausedByWidget = false
+        countdownPlayed = {}
+        nextBreakGameTime = gameNow + BreakIntervalSeconds()
+    end
+
+    --------------------------------------------------------
+    -- Countdown
+    --------------------------------------------------------
+
     if pauseStartTimer then
-        local elapsed = Spring.DiffTimers(Spring.GetTimer(), pauseStartTimer)
-        local remaining = math.ceil(BreakDurationSeconds() - elapsed)
+        local elapsed =
+            Spring.DiffTimers(Spring.GetTimer(), pauseStartTimer)
+        local remaining =
+            math.ceil(BreakDurationSeconds() - elapsed)
 
         if COUNTDOWN_SECONDS[remaining] and not countdownPlayed[remaining] then
             Spring.Echo("⏳ Resuming game in " .. remaining .. " seconds...")
@@ -141,8 +183,9 @@ function widget:Update(dt)
         ----------------------------------------------------
         -- Resume
         ----------------------------------------------------
+
         if elapsed >= BreakDurationSeconds() then
-            if pausedByWidget and IsPaused() then
+            if pausedByWidget and pausedNow then
                 Spring.SendCommands("pause 0")
                 Spring.Echo("🎮 Break over! Game resumed.")
             end
@@ -153,5 +196,7 @@ function widget:Update(dt)
             nextBreakGameTime = gameNow + BreakIntervalSeconds()
         end
     end
+
+    wasPausedLastUpdate = pausedNow
 end
 
