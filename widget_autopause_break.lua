@@ -25,8 +25,6 @@ local config = {
 ------------------------------------------------------------
 
 local UPDATE_INTERVAL = 1
-
--- Known-to-exist BAR sound (changeable by users)
 local ALERT_SOUND = "LuaUI/Sounds/notification.wav"
 
 local COUNTDOWN_SECONDS = {
@@ -34,6 +32,12 @@ local COUNTDOWN_SECONDS = {
     [5]  = true,
     [3]  = true,
     [2]  = true,
+    [1]  = true,
+}
+
+-- Countdown seconds that should be announced to all players
+local MULTI_CHAT_COUNTDOWN = {
+    [10] = true,
     [1]  = true,
 }
 
@@ -48,6 +52,7 @@ local pausedByWidget = false
 local wasPausedLastUpdate = false
 local lastUpdate = 0
 local countdownPlayed = {}
+local gameStartAnnounced = false
 
 ------------------------------------------------------------
 -- HELPERS
@@ -120,6 +125,19 @@ function widget:Update(dt)
     local pausedNow = IsPaused()
 
     --------------------------------------------------------
+    -- Announce widget presence once game actually starts
+    --------------------------------------------------------
+
+    if not gameStartAnnounced and gameNow > 0 then
+        Spring.SendCommands(
+            "say Auto break reminder active: "
+            .. config.breakIntervalMinutes .. " min interval, "
+            .. config.breakDurationMinutes .. " min breaks"
+        )
+        gameStartAnnounced = true
+    end
+
+    --------------------------------------------------------
     -- Manual pause detection
     --------------------------------------------------------
 
@@ -152,7 +170,6 @@ function widget:Update(dt)
             Spring.SendCommands("pause 1")
             pausedByWidget = true
 
-            -- Announce to all players (once)
             Spring.SendCommands(
                 "say Stretch break started ("
                 .. config.breakDurationMinutes .. " min)"
@@ -190,6 +207,13 @@ function widget:Update(dt)
         if COUNTDOWN_SECONDS[remaining] and not countdownPlayed[remaining] then
             Spring.Echo("⏳ Resuming game in " .. remaining .. " seconds...")
             PlayAlert()
+
+            if MULTI_CHAT_COUNTDOWN[remaining] then
+                Spring.SendCommands(
+                    "say Game resumes in " .. remaining .. " seconds"
+                )
+            end
+
             countdownPlayed[remaining] = true
         end
 
