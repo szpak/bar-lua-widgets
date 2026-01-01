@@ -1,7 +1,8 @@
 # Auto Pause Break Reminder (BAR widget)
 
-A quality-of-life Lua widget for **Beyond All Reason** (a free & libre RTS
-game) that automatically pauses the game at regular intervals to remind
+A quality-of-life Lua widget for
+[**Beyond All Reason**](https://www.beyondallreason.info/) (a free & libre
+RTS game) that automatically pauses the game at regular intervals to remind
 players to take short stretch breaks, then resumes the game with audible and
 visible warnings.
 
@@ -30,8 +31,8 @@ Beyond-All-Reason/data/LuaUI/Widgets/
 ```
 
 2. Start BAR
-3. Press **F11** → enable **Auto Pause Break Reminder**
-4. Restart game if needed
+3. Press **F11** → enable **Auto Pause Break Reminder** (usually scroll to the bottom)
+4. Restart game if needed ("ENTER → `/luaui reload` → ENTER" might also help)
 
 ---
 
@@ -58,7 +59,7 @@ Available options:
 
 ## Usage Notes
 
-- Best used with player agreement in multiplayer games
+- Best used with player agreement in multiplayer games (inform about that in the lobby before a battle is started)
 - Manual pauses longer than the break duration are counted as valid breaks
 - Manual unpausing cancels the current break immediately
 - Break timing is based on **gameplay time**, not wall-clock time
@@ -74,7 +75,14 @@ Available options:
 
 ---
 
+## Author
+
+The widget was created by [szpak](https://github.com/szpak/) with heavily assist from AI (GPT-4.1).
+Tested, debugged and overseen by Humans.
+
+---
+
 ## License
 
-GPLv2+
+[GPLv2+](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
