@@ -25,7 +25,9 @@ local config = {
 ------------------------------------------------------------
 
 local UPDATE_INTERVAL = 1
-local ALERT_SOUND = "LuaUI/Sounds/notification.wav"
+
+-- BAR / Recoil compatible sound
+local ALERT_SOUND = "LuaUI/Sounds/pop.wav"
 
 local COUNTDOWN_SECONDS = {
     [10] = true,
@@ -35,11 +37,13 @@ local COUNTDOWN_SECONDS = {
     [1]  = true,
 }
 
--- Countdown seconds that should be announced to all players
+-- Countdown seconds announced to all players
 local MULTI_CHAT_COUNTDOWN = {
     [10] = true,
     [1]  = true,
 }
+
+local CHAT_PREFIX = "[AutoBreak] "
 
 ------------------------------------------------------------
 -- STATE
@@ -107,7 +111,7 @@ function widget:Initialize()
     nextBreakGameTime = now + BreakIntervalSeconds()
 
     Spring.Echo(
-        "🧘 Auto Break Reminder enabled: every "
+        "🧘 AutoBreak enabled: every "
         .. config.breakIntervalMinutes .. " min, "
         .. config.breakDurationMinutes .. " min breaks"
         .. (config.soundEnabled and " (sound on)" or " (sound off)")
@@ -125,14 +129,15 @@ function widget:Update(dt)
     local pausedNow = IsPaused()
 
     --------------------------------------------------------
-    -- Announce widget presence once game actually starts
+    -- Announce widget once game actually starts
     --------------------------------------------------------
 
     if not gameStartAnnounced and gameNow > 0 then
         Spring.SendCommands(
-            "say Auto break reminder active: "
-            .. config.breakIntervalMinutes .. " min interval, "
-            .. config.breakDurationMinutes .. " min breaks"
+            "say " .. CHAT_PREFIX ..
+            "Active: breaks every "
+            .. config.breakIntervalMinutes .. " min, duration "
+            .. config.breakDurationMinutes .. " min"
         )
         gameStartAnnounced = true
     end
@@ -168,18 +173,24 @@ function widget:Update(dt)
 
         if not pausedNow then
             Spring.SendCommands("pause 1")
+
+            -- Pause/unpause commands are applied asynchronously by the engine.
+            -- Exit this Update() to avoid acting on stale pause state.
             pausedByWidget = true
+            pauseStartTimer = Spring.GetTimer()
+            countdownPlayed = {}
 
             Spring.SendCommands(
-                "say Stretch break started ("
+                "say " .. CHAT_PREFIX ..
+                "Stretch break started ("
                 .. config.breakDurationMinutes .. " min)"
             )
+            return
         else
             pausedByWidget = false
+            pauseStartTimer = Spring.GetTimer()
+            countdownPlayed = {}
         end
-
-        pauseStartTimer = Spring.GetTimer()
-        countdownPlayed = {}
     end
 
     --------------------------------------------------------
@@ -210,17 +221,30 @@ function widget:Update(dt)
 
             if MULTI_CHAT_COUNTDOWN[remaining] then
                 Spring.SendCommands(
-                    "say Game resumes in " .. remaining .. " seconds"
+                    "say " .. CHAT_PREFIX ..
+                    "Game resumes in " .. remaining .. " seconds"
                 )
             end
 
             countdownPlayed[remaining] = true
         end
 
+        ----------------------------------------------------
+        -- Resume
+        ----------------------------------------------------
+
         if elapsed >= BreakDurationSeconds() then
             if pausedByWidget and pausedNow then
                 Spring.SendCommands("pause 0")
-                Spring.Echo("🎮 Break over! Game resumed.")
+
+                -- Pause/unpause commands are applied asynchronously by the engine.
+                -- Exit this Update() to avoid acting on stale pause state.
+                Spring.Echo("🎮 Break over! Game resuming.")
+                pauseStartTimer = nil
+                pausedByWidget = false
+                countdownPlayed = {}
+                nextBreakGameTime = gameNow + BreakIntervalSeconds()
+                return
             end
 
             pauseStartTimer = nil
