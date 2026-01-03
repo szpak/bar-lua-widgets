@@ -108,6 +108,25 @@ function widget:SetConfigData(data)
 end
 
 ------------------------------------------------------------
+-- CONFIG OVERRIDE IN RUNTIME
+------------------------------------------------------------
+
+function widget:TextCommand(cmd)
+    local value = cmd:match("^autobreak manualpauses (%a+)$")
+    if value then
+        local enabled = (value == "true" or value == "1" or value == "on")
+
+        config.countManualPausesAsBreaks = enabled
+
+        Spring.Echo(
+            "[AutoBreak] countManualPausesAsBreaks = "
+            .. tostring(enabled)
+        )
+        return true
+    end
+end
+
+------------------------------------------------------------
 -- LIFECYCLE
 ------------------------------------------------------------
 

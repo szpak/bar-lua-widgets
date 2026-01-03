@@ -77,6 +77,15 @@ as stretch breaks by setting:
 countManualPausesAsBreaks = false
 ```
 
+### Runtime configuration
+
+Widget configuration is loaded once at game start.
+To change settings during a game, use console commands:
+
+```
+/luaui autobreak manualpauses on|off
+```
+
 Then reload widgets with:
 
 ```
