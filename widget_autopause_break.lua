@@ -1,3 +1,4 @@
+```lua
 function widget:GetInfo()
     return {
         name    = "Auto Pause Break Reminder",
@@ -18,6 +19,7 @@ local config = {
     breakIntervalMinutes = 30,
     breakDurationMinutes = 2,
     soundEnabled = true,
+    countManualPausesAsBreaks = true,
 }
 
 ------------------------------------------------------------
@@ -100,6 +102,9 @@ function widget:SetConfigData(data)
     if type(data.soundEnabled) == "boolean" then
         config.soundEnabled = data.soundEnabled
     end
+    if type(data.countManualPausesAsBreaks) == "boolean" then
+        config.countManualPausesAsBreaks = data.countManualPausesAsBreaks
+    end
 end
 
 ------------------------------------------------------------
@@ -114,7 +119,8 @@ function widget:Initialize()
         "🧘 AutoBreak enabled: every "
         .. config.breakIntervalMinutes .. " min, "
         .. config.breakDurationMinutes .. " min breaks"
-        .. (config.soundEnabled and " (sound on)" or " (sound off)")
+        .. (config.soundEnabled and " (sound: on" or " (sound: off")
+        .. ", count manual pauses: " .. (config.countManualPausesAsBreaks and "on" or "off") .. ")"
     )
 end
 
@@ -155,8 +161,12 @@ function widget:Update(dt)
             Spring.DiffTimers(Spring.GetTimer(), manualPauseTimer)
 
         if manualPauseDuration >= BreakDurationSeconds() then
-            nextBreakGameTime = gameNow + BreakIntervalSeconds()
-            Spring.Echo("🧘 Manual pause counted as a break. Next reminder reset.")
+            if config.countManualPausesAsBreaks then
+                nextBreakGameTime = gameNow + BreakIntervalSeconds()
+                Spring.Echo("🧘 Manual pause counted as a break. Next reminder reset.")
+            else
+                Spring.Echo("🧘 Manual pause NOT counted as a break, as configured.")
+            end
         end
 
         manualPauseTimer = nil
@@ -256,4 +266,3 @@ function widget:Update(dt)
 
     wasPausedLastUpdate = pausedNow
 end
-

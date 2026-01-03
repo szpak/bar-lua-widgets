@@ -44,6 +44,7 @@ Available options:
 - `breakIntervalMinutes` (default: 30)
 - `breakDurationMinutes` (default: 2)
 - `soundEnabled` (default: true)
+- `countManualPausesAsBreaks` (default: true)
 
 ---
 
@@ -63,6 +64,24 @@ Available options:
 - Manual pauses longer than the break duration are counted as valid breaks
 - Manual unpausing cancels the current break immediately
 - Break timing is based on **gameplay time**, not wall-clock time
+
+---
+
+## Skirmish vs AI
+
+When playing against AI (especially in the testing/learning mode),
+manual pauses are often tactical. You can disable treating manual pauses
+as stretch breaks by setting:
+
+```
+countManualPausesAsBreaks = false
+```
+
+Then reload widgets with:
+
+```
+/luaui reload
+```
 
 ---
 
