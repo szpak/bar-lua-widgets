@@ -11,6 +11,10 @@ player actions.
 
 ---
 
+![Auto pause break reminder BAR widget promo infographic](/images/auto-pause-break-reminder-bar-widget-infographic.jpg)
+
+---
+
 ## Features
 
 - ⏸ Automatically pauses the game every N minutes
@@ -107,6 +111,8 @@ Then reload widgets with:
 
 The widget was created by [szpak](https://github.com/szpak/) with heavily assist from AI (GPT-4.1).
 Tested, debugged and overseen by Humans.
+
+The promo infographic generated with Gemini 3.
 
 ---
 
